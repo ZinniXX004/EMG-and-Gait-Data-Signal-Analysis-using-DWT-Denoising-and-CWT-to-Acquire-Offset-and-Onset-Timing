@@ -164,7 +164,7 @@ class MplCanvas(QWidget):
         self.toolbar = NavigationToolbar(self.canvas, self)
         self.toolbar.setStyleSheet("background-color: #2c2c3e; color: white;")
         
-        # Vertical layout
+        # Layout Vertikal: Toolbar on top, Plot below
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
@@ -181,14 +181,14 @@ class MplCanvas(QWidget):
     def style_axis(self, ax, is_3d=False):
         ax.set_facecolor('#1e1e2e')
         
-        # Title and Color Lable
+        # Colors for Title and Labels
         ax.title.set_color('white')
         ax.xaxis.label.set_color('white')
         ax.yaxis.label.set_color('white')
         if is_3d: 
             ax.zaxis.label.set_color('white')
         
-        # Number Color (Ticks)
+        # Colors for Ticks
         ax.tick_params(axis='x', colors='white')
         ax.tick_params(axis='y', colors='white')
         if is_3d: 
@@ -197,17 +197,18 @@ class MplCanvas(QWidget):
         # Grid Lines
         ax.grid(True, linestyle='--', alpha=0.2, color='white')
         
-        # Spines (Garis tepi kotak grafik) - Khusus 2D
+        # Spines (Border lines) - 2D only
         if not is_3d:
             for spine in ax.spines.values():
                 spine.set_color('white')
         else:
-            # Warna dinding pane untuk 3D
+            # Pane walls for 3D
             ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.05))
             ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.05))
             ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.05))
 
     def format_legend(self, ax):
+        """Formats legend with white text and dark background."""
         legend = ax.get_legend()
         if legend:
             legend.get_frame().set_facecolor('#2c2c3e')
@@ -216,18 +217,19 @@ class MplCanvas(QWidget):
                 text.set_color("white")
 
     def format_colorbar(self, cbar):
+        """Formats colorbar ticks and label to white."""
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
         cbar.set_label(cbar.ax.get_ylabel(), color='white')
 
-# MAIN WINDOW
+# MAIN GUI CLASS (MAIN WINDOW)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("5023231017 - Jeremia Christ Immanuel Manalu - ASN - EMG Gait Analysis System (Physionet Dataset)")
-        self.setGeometry(100, 100, 1280, 850)
+        self.setWindowTitle("5023231017 - Jeremia Christ Immanuel Manalu - ASN - EMG Gait Analysis System (Physionet)")
+        self.setGeometry(100, 100, 1350, 850)
         
-        # Data Storage Variable
+        # Data Storage Variables
         self.raw_data = None
         self.segments = None 
         
@@ -242,7 +244,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         
-        # Header
+        # --- Header ---
         header_layout = QHBoxLayout()
         title_label = QLabel("EMG Movement Signal Analysis Pipeline")
         title_label.setStyleSheet("font-size: 18pt; font-weight: bold; color: #b39ddb;")
@@ -329,7 +331,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Could not load record '{rec_name}'. Check file existence.")
 
     def plot_raw_data_ui(self):
-        # Clear Old Plot
+        # Clear previous plots
         while self.plot_layout_raw.count():
             child = self.plot_layout_raw.takeAt(0)
             if child.widget():
@@ -386,15 +388,15 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Step 2: Segmentation & Cycle Selection")
         vlo = QVBoxLayout()
         
-        # Line 1: Run Button
+        # Row 1: Run Button
         row1 = QHBoxLayout()
         btn_seg = QPushButton("Run Segmentation")
         btn_seg.clicked.connect(self.process_segmentation)
-        row1.addWidget(QLabel("Detect Heel Strikes:"))
+        row1.addWidget(QLabel("Detect Toe Offs (TO-TO Cycles):"))
         row1.addWidget(btn_seg)
         row1.addStretch()
         
-        # Line 2: Cycle Selector
+        # Row 2: Selector Siklus
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Select Cycle to Inspect:"))
         self.spin_cycle = QSpinBox()
@@ -432,14 +434,12 @@ class MainWindow(QMainWindow):
             self.spin_cycle.setRange(1, num_cycles)
             # Set value 1 and call plot
             self.spin_cycle.setValue(1)
-            # Note: setValue triggers valueChanged -> plot_segmentation_ui
             if self.spin_cycle.value() == 1:
                 self.plot_segmentation_ui()
         else:
             self.status_label.setText("Segmentation failed. No cycles found.")
 
     def plot_segmentation_ui(self):
-        # Clear layout
         while self.plot_layout_seg.count():
             child = self.plot_layout_seg.takeAt(0)
             if child.widget():
@@ -452,7 +452,6 @@ class MainWindow(QMainWindow):
         
         seg = self.segments[selected_id - 1]
         
-        # Use Absolute Time from segment dictionary
         t_abs = seg['time'] 
         
         # 4 Separate Canvases
@@ -463,7 +462,7 @@ class MainWindow(QMainWindow):
         ax1.plot(self.raw_data['time'], self.raw_data['signal_fs'], color='white', alpha=0.5, linewidth=0.5, label='Raw FS')
         ax1.axvspan(t_abs[0], t_abs[-1], color='yellow', alpha=0.3, label='Selected Cycle')
         ax1.set_title(f"Full Foot Switch Signal ({len(self.segments)} Cycles)")
-        ax1.set_ylabel("Amplitude (mV)")
+        ax1.set_ylabel("Amplitude (V)")
         ax1.set_xlabel("Time (s)")
         ax1.legend(loc='upper right', fontsize='small')
         canvas1.format_legend(ax1)
@@ -477,17 +476,19 @@ class MainWindow(QMainWindow):
         
         ax2.plot(t_abs, seg['fs_segment'], color='#e0e0e0')
         ax2.set_title(f"Cycle {selected_id} - Foot Switch Segment")
-        ax2.set_ylabel("Amplitude (mV)")
+        ax2.set_ylabel("Amplitude (V)")
         ax2.set_xlabel("Time (s) [Absolute]")
         
-        # Heel Strike and Toe Off lines using absolute time
-        ax2.axvline(t_abs[0], color='#ff5252', linestyle='--', label='Heel Strike (Start)')
-        ax2.axvline(t_abs[-1], color='#e040fb', linestyle='--', label='Next Heel Strike')
+        # FIX: Logic for lines (Red=TO, Purple=Next TO, Cyan=HS)
+        ax2.axvline(t_abs[0], color='#ff5252', linestyle='--', label='Toe Off (Start)')
+        ax2.axvline(t_abs[-1], color='#e040fb', linestyle='--', label='Next Toe Off')
         
-        if seg.get('to_idx') is not None:
-            # Calculate Absolute Time for Toe Off
-            to_time_abs = self.raw_data['time'][seg['to_idx']]
-            ax2.axvline(to_time_abs, color='#18ffff', linestyle=':', linewidth=2, label='Toe Off')
+        if seg.get('hs_time_rel') is not None:
+            # Calculate Absolute Time for Heel Strike (using offset)
+            # The segmentation script passes 'hs_time_rel' which is relative to the start of the segment.
+            # So we add it to t_abs[0]
+            hs_time_abs = t_abs[0] + seg['hs_time_rel']
+            ax2.axvline(hs_time_abs, color='#18ffff', linestyle=':', linewidth=2, label='Heel Strike')
             
         ax2.legend(loc='upper right')
         canvas2.format_legend(ax2)
@@ -505,7 +506,10 @@ class MainWindow(QMainWindow):
         
         ax3.axvline(t_abs[0], color='#ff5252', linestyle='--', alpha=0.5)
         ax3.axvline(t_abs[-1], color='#e040fb', linestyle='--', alpha=0.5)
-            
+        if seg.get('hs_time_rel') is not None:
+             hs_time_abs = t_abs[0] + seg['hs_time_rel']
+             ax3.axvline(hs_time_abs, color='#18ffff', linestyle=':', alpha=0.5)
+
         canvas3.style_axis(ax3)
         canvas3.fig.tight_layout()
         self.plot_layout_seg.addWidget(canvas3)
@@ -520,12 +524,15 @@ class MainWindow(QMainWindow):
         
         ax4.axvline(t_abs[0], color='#ff5252', linestyle='--', alpha=0.5)
         ax4.axvline(t_abs[-1], color='#e040fb', linestyle='--', alpha=0.5)
+        if seg.get('hs_time_rel') is not None:
+             hs_time_abs = t_abs[0] + seg['hs_time_rel']
+             ax4.axvline(hs_time_abs, color='#18ffff', linestyle=':', alpha=0.5)
             
         canvas4.style_axis(ax4)
         canvas4.fig.tight_layout()
         self.plot_layout_seg.addWidget(canvas4)
 
-    # TAB 3: FILTERING (UPDATED FOR 2 METHODS & FREQ RESPONSE)
+    # TAB 3: FILTERING
     def create_tab_filtering(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -593,7 +600,7 @@ class MainWindow(QMainWindow):
         
         # 3 Separate Canvases (Freq Resp + GL + VL)
         
-        # 1. Frequency Response Comparison (Method 1 vs Method 2)
+        # 1. Frequency Response Comparison
         canvas_freq = MplCanvas(self, width=5, height=4)
         ax_f = canvas_freq.axes
         
@@ -601,7 +608,7 @@ class MainWindow(QMainWindow):
         f1, mag1 = ModulFilter.get_frequency_response_data(fs, ModulFilter.METHOD_STANDARD)
         f2, mag2 = ModulFilter.get_frequency_response_data(fs, ModulFilter.METHOD_RBJ)
         
-        # Plot Lines (Linear Scale X-Axis for BPF specific view)
+        # Plot Lines (Linear Scale X-Axis)
         line1, = ax_f.plot(f1, mag1, label='Standard BPF', color='cyan')
         line2, = ax_f.plot(f2, mag2, label='RBJ Cascade', color='magenta', linestyle='--')
         
@@ -618,7 +625,7 @@ class MainWindow(QMainWindow):
         ax_f.set_ylabel("Magnitude (Linear)")
         ax_f.grid(True, which='both', linestyle='--', alpha=0.3)
         
-        # Set X-Limit to show Passband (20-450) clearly + Stopband context
+        # Set X-Limit to show Passband (20-450) clearly
         ax_f.set_xlim(0, 600) 
         
         ax_f.legend(loc='lower right')
@@ -656,7 +663,7 @@ class MainWindow(QMainWindow):
         canvas_vl.fig.tight_layout()
         self.plot_layout_filt.addWidget(canvas_vl)
 
-    # TAB 4: DENOISING (Window Control)
+    # TAB 4: DENOISING
     def create_tab_denoising(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -713,7 +720,6 @@ class MainWindow(QMainWindow):
         
         window_types = ["Rectangular", "Hanning", "Hamming", "Blackman", "Triangular", "Kaiser"]
         
-        # Create Grid of Plots
         for w_type in window_types:
             window = ModulDenoise.ManualWindow.get_window(w_type, N)
             applied = sine_wave * window
@@ -871,8 +877,7 @@ class MainWindow(QMainWindow):
             
         is_3d = self.radio_3d_stft.isChecked()
         use_db = self.chk_db_stft.isChecked()
-        sel = self.spin_cycle.value() if self.segments else 1
-        seg = self.segments[sel - 1]
+        sel = self.spin_cycle.value() if self.segments else 1; seg = self.segments[sel - 1]
         
         # Loop for each muscle
         for muscle in ['GL', 'VL']:
@@ -1028,7 +1033,7 @@ class MainWindow(QMainWindow):
         
         h1 = QHBoxLayout()
         h1.addWidget(QLabel("Threshold (% Peak):"))
-        self.spin_th = QDoubleSpinBox(); self.spin_th.setRange(0.1, 20.0); self.spin_th.setValue(1.0); self.spin_th.setSingleStep(0.1)
+        self.spin_th = QDoubleSpinBox(); self.spin_th.setRange(0.1, 100.0); self.spin_th.setValue(1.0); self.spin_th.setSingleStep(0.1)
         h1.addWidget(self.spin_th); h1.addStretch()
         
         h2 = QHBoxLayout()
@@ -1043,8 +1048,7 @@ class MainWindow(QMainWindow):
         group_ctrl.setLayout(vlo_ctrl)
         layout.addWidget(group_ctrl)
         
-        # --- SPLIT VIEW: GRAPHS (Top) | REPORT (Bottom) ---
-        # Changed to Vertical Splitter as per latest request
+        # --- SPLIT VIEW: GRAPHS (Left) | REPORT (Right) ---
         splitter = QSplitter(Qt.Orientation.Vertical)
         
         # Top: Scroll Area for Plots
@@ -1058,11 +1062,10 @@ class MainWindow(QMainWindow):
         self.txt_report.setReadOnly(True)
         self.txt_report.setPlaceholderText("Analysis results will appear here...")
         self.txt_report.setStyleSheet("font-family: Consolas; font-size: 10pt; background-color: #1e1e2e; color: #00e676;")
-        self.txt_report.setMinimumHeight(150) # Ensure minimum height
+        self.txt_report.setMinimumHeight(150) 
         
         splitter.addWidget(scroll_plots)
         splitter.addWidget(self.txt_report)
-        # Set stretch factors: Plots get more space (3), Report gets less (1)
         splitter.setStretchFactor(0, 3) 
         splitter.setStretchFactor(1, 1)
         
@@ -1101,6 +1104,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Detection Complete.")
         self.plot_threshold_ui()
         
+        # GENERATE REPORT FOR CURRENT CYCLE
         sel = self.spin_cycle.value()
         current_seg = self.segments[sel-1]
         report_text = Result_Reporting.generate_cycle_report(current_seg)
@@ -1132,7 +1136,7 @@ class MainWindow(QMainWindow):
             
             if is_3d:
                 T, F = np.meshgrid(tn, f)
-                surf = canvas_cwt.axes.plot_surface(T, F, E, cmap='magma', alpha=0.9)
+                canvas_cwt.axes.plot_surface(T, F, E, cmap='magma', alpha=0.9)
                 
                 # Plane
                 xp, yp = np.meshgrid([0, 100], [f[0], f[-1]])
@@ -1141,7 +1145,7 @@ class MainWindow(QMainWindow):
                 canvas_cwt.axes.view_init(30, -45)
                 
                 # Add Colorbar
-                cbar = canvas_cwt.figure.colorbar(surf, ax=ax_cwt, label="Energy Density", pad=0.1)
+                cbar = canvas_cwt.figure.colorbar(canvas_cwt.axes.collections[0], ax=ax_cwt, pad=0.1)
                 canvas_cwt.format_colorbar(cbar)
             else:
                 cf = ax_cwt.contourf(tn, f, E, 50, cmap='magma')
@@ -1203,13 +1207,29 @@ class MainWindow(QMainWindow):
             self.plot_layout_th.addWidget(canvas_bin)
 
     def clear_all_data(self):
-        reply = QMessageBox.question(self, 'Confirmation', "Clear all data?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(self, 'Confirmation', 
+                                     "Are you sure you want to clear all data?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
-            self.raw_data = None; self.segments = None; self.spin_cycle.setEnabled(False); self.spin_cycle.setValue(1)
-            for layout in [self.plot_layout_raw, self.plot_layout_seg, self.plot_layout_filt, self.plot_layout_den, self.plot_layout_stft, self.plot_layout_cwt, self.plot_layout_th]:
-                while layout.count(): layout.takeAt(0).widget().deleteLater()
-            self.txt_report.clear()
-            self.status_label.setText("Cleared.")
+            self.raw_data = None
+            self.segments = None
+            self.spin_cycle.setEnabled(False)
+            self.spin_cycle.setValue(1)
+            
+            for layout in [self.plot_layout_raw, self.plot_layout_seg, self.plot_layout_filt,
+                           self.plot_layout_den, self.plot_layout_stft, self.plot_layout_cwt,
+                           self.plot_layout_th]:
+                while layout.count():
+                    child = layout.takeAt(0)
+                    if child.widget():
+                        child.widget().deleteLater()
+            
+            self.status_label.setText("All data cleared.")
+            self.tabs.setCurrentIndex(0)
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv); app.setStyle("Fusion"); window = MainWindow(); window.show(); sys.exit(app.exec())
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion") 
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())

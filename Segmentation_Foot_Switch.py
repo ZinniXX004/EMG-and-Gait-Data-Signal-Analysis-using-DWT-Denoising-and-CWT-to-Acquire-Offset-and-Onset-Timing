@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 
 def detect_events_manual(fs_signal, fs, min_dist_sec=0.4):
     """
+    Manually detects Heel Strike (HS) and Toe Off (TO) events.
+    
     Logic:
     1. Dynamic Thresholding (average of min and max).
     2. Binarization (High/Low state).
@@ -12,7 +14,6 @@ def detect_events_manual(fs_signal, fs, min_dist_sec=0.4):
     Returns: (heel_strikes, toe_offs)
     """
     # 1. Dynamic Thresholding
-    # Calculate the midpoint between the signal's minimum and maximum
     t_min = np.min(fs_signal)
     t_max = np.max(fs_signal)
     threshold = (t_max + t_min) / 2
@@ -23,7 +24,7 @@ def detect_events_manual(fs_signal, fs, min_dist_sec=0.4):
     binary_signal = (np.abs(fs_signal) > np.abs(threshold)).astype(int)
     
     # 3. Edge Detection
-    # Calculates out[i] = a[i+1] - a[i]
+    # np.diff calculates out[i] = a[i+1] - a[i]
     # +1 indicates 0 -> 1 transition (Rising Edge / Heel Strike)
     # -1 indicates 1 -> 0 transition (Falling Edge / Toe Off)
     edges = np.diff(binary_signal)
@@ -32,7 +33,6 @@ def detect_events_manual(fs_signal, fs, min_dist_sec=0.4):
     raw_to = np.where(edges == -1)[0]
     
     # 4. Manual Debouncing
-    # Filters out events that occur too close to the previous one
     def debounce(indices, min_samples):
         if len(indices) == 0: return np.array([])
         clean = [indices[0]]
@@ -49,6 +49,10 @@ def detect_events_manual(fs_signal, fs, min_dist_sec=0.4):
     return clean_hs, clean_to
 
 def segment_data(data_dict):
+    """
+    Segments data into individual cycles (Toe Off to Toe Off).
+    Detects the Heel Strike occurring within the cycle.
+    """
     if data_dict is None:
         print("[!] Data is empty.")
         return []
@@ -56,32 +60,34 @@ def segment_data(data_dict):
     fs_signal = data_dict['signal_fs']
     fs = data_dict['fs']
     
-    print("[-] Performing segmentation (HS to HS) & Toe Off detection...")
+    print("[-] Performing segmentation (TO to TO) & Heel Strike detection...")
     
     # Detect Events
     heel_strikes, toe_offs = detect_events_manual(fs_signal, fs, min_dist_sec=0.5)
     
     segments = []
     
-    # Iterate through heel strikes to define cycles
-    for i in range(len(heel_strikes) - 1):
-        start_idx = heel_strikes[i]
-        end_idx = heel_strikes[i+1]
+    # LOGIC CHANGE: Iterate through Toe Offs instead of Heel Strikes
+    # Cycle = Toe Off [i] -> Toe Off [i+1]
+    # This captures Swing Phase -> Stance Phase
+    for i in range(len(toe_offs) - 1):
+        start_idx = toe_offs[i]
+        end_idx = toe_offs[i+1]
         
-        # Find Toe Off within this specific cycle (Start < TO < End)
-        # Toe Off marks the end of the Stance phase
-        cycle_to_candidates = toe_offs[(toe_offs > start_idx) & (toe_offs < end_idx)]
-        current_to_idx = cycle_to_candidates[0] if len(cycle_to_candidates) > 0 else None
+        # Find Heel Strike within this cycle (Start < HS < End)
+        # The Heel Strike marks the transition from Swing to Stance
+        cycle_hs_candidates = heel_strikes[(heel_strikes > start_idx) & (heel_strikes < end_idx)]
+        current_hs_idx = cycle_hs_candidates[0] if len(cycle_hs_candidates) > 0 else None
         
-        # Validate cycle duration (e.g., 0.5s to 2.5s for normal walking)
+        # Validate cycle duration (e.g., 0.5s to 2.5s)
         duration = (end_idx - start_idx) / fs
         if 0.5 < duration < 2.5:
-            # Slice the signals (Numpy slicing preserves values)
+            # Slice the signals
             seg_dict = {
                 'cycle_id': i + 1,
                 'start_idx': start_idx,
                 'end_idx': end_idx,
-                'to_idx': current_to_idx, # Global Index
+                'hs_idx': current_hs_idx, # Global Index of Heel Strike
                 
                 # Sliced signals
                 'time': data_dict['time'][start_idx:end_idx],
@@ -91,13 +97,13 @@ def segment_data(data_dict):
                 'fs': fs
             }
             
-            # Calculate relative Toe Off time (seconds from start of cycle)
-            if current_to_idx is not None:
-                seg_dict['to_idx_rel'] = current_to_idx - start_idx
-                seg_dict['to_time_rel'] = (current_to_idx - start_idx) / fs
+            # Calculate relative Heel Strike time for plotting
+            if current_hs_idx is not None:
+                seg_dict['hs_idx_rel'] = current_hs_idx - start_idx
+                seg_dict['hs_time_rel'] = (current_hs_idx - start_idx) / fs
             else:
-                seg_dict['to_idx_rel'] = None
-                seg_dict['to_time_rel'] = None
+                seg_dict['hs_idx_rel'] = None
+                seg_dict['hs_time_rel'] = None
                 
             segments.append(seg_dict)
             
@@ -105,7 +111,11 @@ def segment_data(data_dict):
     return segments
 
 def plot_segmentation(data_dict, segments):
-    # Visualizes Full Segmentation (For standalone testing)
+    """
+    Visualizes Full Segmentation (Standalone Test).
+    Red Dashed = Start (Toe Off)
+    Cyan Dotted = Internal Event (Heel Strike)
+    """
     if not segments: return
 
     time = data_dict['time']
@@ -115,23 +125,23 @@ def plot_segmentation(data_dict, segments):
     plt.plot(time, fs_signal, color='white', alpha=0.7, label='Raw Foot Switch')
     
     for i, seg in enumerate(segments):
+        # Plot Start (Toe Off)
         start_t = time[seg['start_idx']]
         plt.axvline(x=start_t, color='#ff5252', linestyle='--', alpha=0.9)
         
-        if seg['to_idx'] is not None:
-            to_t = time[seg['to_idx']]
-            plt.axvline(x=to_t, color='#18ffff', linestyle=':', linewidth=1.5, alpha=0.8)
+        # Plot Internal Heel Strike
+        if seg['hs_idx'] is not None:
+            hs_t = time[seg['hs_idx']]
+            plt.axvline(x=hs_t, color='#18ffff', linestyle=':', linewidth=1.5, alpha=0.8)
 
-    plt.title(f"Segmentation Result: {len(segments)} Cycles")
+    plt.title(f"Segmentation Result (TO-TO): {len(segments)} Cycles")
     ax = plt.gca()
     ax.set_facecolor('#1e1e2e')
     plt.show()
 
-# <<<< Standalone testing >>>>
 if __name__ == "__main__":
     try:
         import Load_and_Plot_Raw_Data as Loader
-        # Change this string to match local file name if testing directly
         data = Loader.load_raw_data("S01")
         if data:
             gait_cycles = segment_data(data)
